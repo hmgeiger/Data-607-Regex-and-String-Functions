@@ -1,0 +1,182 @@
+# Data 607 - Regex and string functions assignment
+### Heather Geiger
+### February 17,2018
+
+## Part 1 - Formatting names using regular expressions
+
+First, we get the names from the raw data.
+
+```{r}
+library(stringr)
+raw.data <-"555-1239Moe Szyslak(636) 555-0113Burns, C. Montgomery555-6542Rev. Timothy Lovejoy555 8904Ned Flanders636-555-3226Simpson, Homer5553642Dr. Julius Hibbert"
+names <- unlist(str_extract_all(raw.data,"[[:alpha:]., ]{2,}"))
+names
+```
+
+Next, we convert to first_name last_name format.
+
+To do this, we split by blank space.
+
+Then we check for commas in the first element after split.
+
+Finally, put whatever is before the comma last and then remove the comma.
+
+```{r}
+names_split_by_spaces <- str_split(names,"[[:blank:]]+")
+names_split_by_spaces
+for(i in 1:length(names))
+{
+first_element_before_space <- names_split_by_spaces[[i]][1]
+if(str_detect(first_element_before_space,",") == TRUE){
+	first_element_minus_comma <- str_replace(names_split_by_spaces[[i]][1],pattern=",",replace="")
+	names_split_by_spaces[[i]] <- c(names_split_by_spaces[[i]][2:length(names_split_by_spaces[[i]])],first_element_minus_comma)
+	}
+}
+names_split_by_spaces
+```
+
+Next, we check if there is a title, like Rev. or Dr.
+For this, we look for two or more alphabetical characters followed by a ".".
+
+```{r}
+has_title <- c()
+
+for(i in 1:length(names))
+{
+first_element <- names_split_by_spaces[[i]][1]
+has_title <- c(has_title,str_detect(first_element,"[[:alpha:]]{2,}\\."))
+}
+
+has_title
+```
+
+To check for a second name, we check the number of elements per item in names_split_by_spaces.
+
+If there are more than two elements (minus the title), then the person has a second name.
+
+```{r}
+second_name <- c()
+
+for(i in 1:length(names))
+{
+num_elements <- length(names_split_by_spaces[[i]])
+if(has_title[i] == TRUE){num_elements <- num_elements - 1}
+second_name <- c(second_name,num_elements > 2)
+}
+
+second_name
+```
+
+Now that we are done checking for titles and second names, let's convert names_split_by_spaces from a list back into a vector. 
+
+Let's put the items in each list pasted together separated by a space.
+
+```{r}
+firstname_lastname <- c()
+
+for(i in 1:length(names))
+{
+firstname_lastname <- c(firstname_lastname,paste0(names_split_by_spaces[[i]],collapse=" "))
+}
+
+data.frame(Name = firstname_lastname,Has.title = has_title,Second.name = second_name)
+```
+
+## Part 2 - Finding strings that match a given regex
+
+1. [0-9]+\\$
+
+The double backslash here means that we are looking for a literal $. [0-9]+ means one or more digits. Together, these mean we are looking for one or more digits followed by a dollar sign.
+
+I tested this using some example strings. The fact that the string ending in digits, but with no literal $, did not match confirms that we are looking for literal $ with this regex.
+
+```{r}
+mystrings <- c("9-to-5","seventy","85$","$$","abc7$","99")
+unlist(str_extract_all(mystrings,"[0-9]+\\$"))
+```
+
+Here, 85$ and the 7$ part of abc7$ both match the regex.
+
+2. \\b[a-z]{1,4}\\b
+
+Here, we are looking for a word edge, followed by 1-4 alphabetical characters, followed by a word edge.
+
+A word edge can be defined as either a word being at the beginning of a string, having only blank space before it, or having other things before it but then having a blank space between those other things and the word start.
+
+```{r}
+mystrings <- c("abc"," abc","abcde fghij","abc def gh ijkl mnopq rst uv9 wx") 
+str_extract_all(mystrings,"\\b[a-z]{1,4}\\b")
+```
+In the first two strings, the words are both "abc". So we have a word edge on either side, and three alphabetical characters, thus fulfilling the regex.
+
+In the third string, both words are too long (5 characters), so we do not match.
+
+In the last string, there are 8 words. 6 of these words match the regex. mnopq does not match because it has too many alphabetical characters before the end of the word. uv9 does not match because there is a non-alphabetical character between the two word edges.
+
+3. .*?\\.txt$
+
+The "\\.txt$" part of this means we want the string to end in ".txt", where we want an actual "." and not just any character.
+
+The ".*?" part means zero or more matches of any character, matched at most once.
+
+This is likely a good regular expression to find files with suffix ".txt".
+
+```{r}
+mystrings <- c("/data/analysis/hmgeiger/Project_RNA/samples.txt","file.txt.txt","file.txt.gz")
+str_extract_all(mystrings,".*?\\.txt$")
+```
+
+4. \\d{2}/\\d{2}/\\d{4}
+
+\\d{2} means 2 digits. \\d{4} means 4 digits. The "/" is a literal slash here. So 2 digits, "/", 2 digits, "/", then 4 digits should match this regex.
+
+```{r}
+mystrings <- c("123/45/6789")
+str_extract_all(mystrings,"\\d{2}/\\d{2}/\\d{4}")
+```
+
+5. 
+
+```{r}
+print("<(.+?)>.+?</\\1>")
+```
+
+No backslashes, so the first "<" and ">" are both literal characters.
+
+So, first match "<", then one or more characters, then ">".
+
+Then match one or more characters again, then "<", then "/".
+
+Then, the "\\1" means we want to look for again whatever we found that matches the part in parentheses (one or more characters).
+
+Finally, end with a ">".
+
+```{r}
+mystring <- "<tag>stuff in between</tag>"
+str_extract_all(mystring,"<(.+?)>.+?</\\1>")
+```
+
+Weirdly, I thought that this should work just as well with nothing in between the two sets of <>, because of the "?".
+
+But it seems it does not.
+
+```{r}
+mystring <- "<tag></tag>"
+str_extract_all(mystring,"<(.+?)>.+?</\\1>")
+```
+
+We don't get a match if the end part (after "/") does not match the first part exactly before ending with the >.
+
+```{r}
+mystring <- "<tag>stuff in between</tag2>"
+str_extract_all(mystring,"<(.+?)>.+?</\\1>")
+```
+
+We can however put whatever we want in between the first <>, as long as we put something.
+
+Again, I thought the "?" meant we could also put nothing, but this appears not to be the case.
+
+```{r}
+mystrings <- c("<>stuff in between</>","<12345>stuffinbetween</12345>")
+str_extract_all(mystrings,"<(.+?)>.+?</\\1>")
+```
